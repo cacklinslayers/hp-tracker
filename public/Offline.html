@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Offline • HP Tracker</title>
+
+    <!-- Include your app fonts (same as in index.html) -->
+    <link rel="stylesheet" href="./fonts.css" />
+
+    <style>
+      body {
+        margin: 0;
+        padding: 20px;
+        font-family: "Inter", sans-serif;
+        background: #f3f3f3;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        box-sizing: border-box;
+      }
+
+      .card {
+        background: #ffffff;
+        border-radius: 12px;
+        padding: 24px;
+        max-width: 360px;
+        width: 100%;
+        text-align: center;
+
+        border: 1px solid #d1d5db;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      }
+
+      h1 {
+        font-family: "taurunum", sans-serif;
+        font-size: 32px;
+        margin-bottom: 12px;
+        color: #bd1a28;
+      }
+
+      p {
+        color: #555;
+        font-size: 16px;
+        line-height: 1.4;
+        margin-bottom: 20px;
+      }
+
+      button {
+        width: 100%;
+        padding: 12px 0;
+        border-radius: 10px;
+        border: none;
+        cursor: pointer;
+
+        background: #bd1a28;
+        color: white;
+        font-weight: 700;
+        font-size: 16px;
+        font-family: "Inter", sans-serif;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="card">
+      <h1>Offline</h1>
+
+      <p>
+        Something went wrong connecting to the internet. You can continue using
+        the app, or try reconnecting.
+      </p>
+
+      <button onclick="window.location.reload()">Try Again</button>
+    </div>
+  </body>
+</html>

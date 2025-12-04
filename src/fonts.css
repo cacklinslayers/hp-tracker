@@ -1,0 +1,9 @@
+@import url("https://use.typekit.net/wns5yon.css");
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: #f3f3f3; /* jouw app background */
+  overflow: hidden; /* voorkomt scroll-bounce en witte randen */
+  height: 100%;
+}

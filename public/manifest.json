@@ -1,0 +1,32 @@
+{
+  "name": "Cacklin Slayers HP Tracker",
+  "short_name": "HP Tracker",
+  "description": "A powerful HP tracker for D&D combat, built for both players and Dungeon Masters.",
+
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+
+  "background_color": "#F3F3F3",
+  "theme_color": "#BD1A28",
+
+  "icons": [
+    {
+      "src": "icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

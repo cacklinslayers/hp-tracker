@@ -1,0 +1,110 @@
+// theme.js
+// Globale huisstijl voor Cacklin' Slayers
+
+const theme = {
+  // ------------ Branding Kleuren ------------
+  colors: {
+    text: "#121212",            // Bijna zwart
+    background: "#F3F3F3",      // Lichtgrijs (app achtergrond)
+    card: "#FFFFFF",            // Kaarten
+    border: "#D1D5DB",          // Subtiel grijs
+
+    primaryBlue: "#0099CD",
+    primaryRed: "#BD1A28",
+    primaryGreen: "#03A23A",
+    primaryYellow: "#CB9600",
+
+    // Buttons (kunnen nog worden uitgebreid)
+    btnPrimary: "#0099CD",
+    btnDanger: "#BD1A28",
+    btnSuccess: "#03A23A",
+    btnDark: "#121212",
+  },
+
+  // ------------ Fonts ------------
+  fonts: {
+    title: "'Cinzel', serif",
+    body: "'Lora', serif",
+  },
+
+  // ------------ HP bar kleuren ------------
+  hpColors: {
+    high: "#03A23A",        // > 60%
+    mid: "#CB9600",         // 30–60%
+    low: "#BD1A28",         // < 30%
+    temp: "#0099CD",        // overlay temp HP
+  },
+
+  // ------------ UI Elementen ------------
+  spacing: {
+    sm: 6,
+    md: 12,
+    lg: 18,
+  },
+
+  radius: {
+    sm: 6,
+    md: 8,
+    lg: 12,
+  },
+
+  shadow: {
+    card: "0 1px 3px rgba(0,0,0,0.12)",
+  },
+
+  // ------------ Component Styles ------------
+  components: {
+    button: {
+      base: {
+        padding: "8px 12px",
+        fontWeight: 700,
+        border: "none",
+        borderRadius: 8,
+        cursor: "pointer",
+        color: "#FFFFFF",
+        fontFamily: "'Cinzel', serif",
+      },
+      primary: {
+        background: "#0099CD",
+      },
+      danger: {
+        background: "#BD1A28",
+      },
+      success: {
+        background: "#03A23A",
+      },
+      dark: {
+        background: "#121212",
+      },
+      grey: {
+        background: "#6B7280",
+      }
+    },
+
+    card: {
+      background: "#FFFFFF",
+      padding: 12,
+      borderRadius: 8,
+      border: "1px solid #D1D5DB",
+      boxShadow: "0 1px 3px rgba(0,0,0,0.12)",
+    },
+
+    acShield: {
+      width: 34,
+      height: 40,
+      background: "#121212",
+      borderRadius: "10px 10px 14px 14px",
+      border: "2px solid #9ca3af",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      color: "white",
+      fontWeight: 700,
+      fontSize: 13,
+      boxShadow: "0 1px 3px rgba(0,0,0,0.4)",
+      fontFamily: "'Cinzel', serif",
+    }
+  },
+};
+
+export default theme;

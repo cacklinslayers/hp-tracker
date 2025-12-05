@@ -787,7 +787,7 @@ function OverviewPage({
             fontSize: 13,
           }}
         >
-          Connected to dungeon{" "}
+          Connected to session{" "}
           <strong>{playerDungeonCode.toUpperCase()}</strong>
         </div>
       )}
@@ -807,13 +807,13 @@ function OverviewPage({
           onClick={onCreateDungeon}
           style={{ ...buttonStyle, background: "#BD1A28" }}
         >
-          Create Dungeon
+          Create Session
         </button>
         <button
           onClick={onJoinDungeon}
           style={{ ...buttonStyle, background: "#03A23A" }}
         >
-          Join Dungeon
+          Join Session
         </button>
       </div>
 
@@ -2044,7 +2044,7 @@ function JoinDungeonPage({
           fontSize: 32,
         }}
       >
-        Join Dungeon
+        Join Session
       </h1>
 
       {/* DUNGEON CODE CARD */}
@@ -2268,7 +2268,7 @@ function DMDungeonCodePage({
             width: "100%",
           }}
         >
-          End Dungeon
+          End Session
         </button>
       </div>
 
@@ -2374,7 +2374,7 @@ function DMDashboardPage({ dungeonCode, goBack }) {
           border: `1px solid ${theme.colors.border}`,
         }}
       >
-        Dungeon code: <strong>{normalized}</strong>
+        Session code: <strong>{normalized}</strong>
       </div>
 
       <div style={{ display: "grid", gap: 10 }}>
@@ -2388,7 +2388,7 @@ function DMDashboardPage({ dungeonCode, goBack }) {
               fontSize: 14,
             }}
           >
-            Wacht op spelers…
+            Waiting for players…
           </div>
         )}
 
@@ -2426,7 +2426,7 @@ function DMDashboardPage({ dungeonCode, goBack }) {
           onClick={goBack}
           style={{ ...buttonStyle, background: theme.colors.btnDark }}
         >
-          Terug naar overzicht
+          Back to Overview
         </button>
       </div>
     </div>
@@ -2518,7 +2518,7 @@ function DMPaywallModal({ close, unlock }) {
           }}
         >
           With DM Mode you can:
-          <br />• Create dungeons
+          <br />• Create sessions
           <br />• Let players join
           <br />• View HP & AC in real-time
         </p>

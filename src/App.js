@@ -439,7 +439,7 @@ export default function App() {
                   clientId={clientId}
                   setPlayerDungeonCode={setPlayerDungeonCode}
                   setIsInDungeonAsPlayer={setIsInDungeonAsPlayer}
-                  setSelected={setSelected} {/* <-- TOEGEVOEGD */}
+                  setSelected={setSelected}
                   goBack={() => setPage("overview")}
                 />
               )}
@@ -1038,34 +1038,37 @@ function BattlePage({
   onSyncStats,
 }) {
   const [input, setInput] = useState("");
-  const [popup, setPopup] = useState(null);
+  const [popup, setPopup] = useState(null); // "long" | "short" | "level" | "temp"
   const [editingAC, setEditingAC] = useState(null);
 
-  /* -----------------------------------------
-     CENTRAL SUPABASE UPDATE FUNCTION
-     ----------------------------------------- */
+  /* -------------------- SUPABASE SYNC HELPER -------------------- */
 
-  const sendUpdatesToSupabase = async (updated) => {
-    await Promise.all(
-      updated.map(
-        (p) =>
+  // Stuurt de actuele stats van alle geselecteerde characters naar public.players
+  // volgens jouw CSV-schema: character_id, hp, max_hp, temp_hp, ac, updated_at
+  const syncToSupabase = async (updated) => {
+    if (!updated || !updated.length) return;
+
+    try {
+      await Promise.all(
+        updated.map((p) =>
           supabase
             .from("players")
             .update({
               hp: p.hp,
-              temp_hp: p.tempHp,
+              temp_hp: p.tempHp || 0,
               ac: p.ac,
               max_hp: p.maxHp,
               updated_at: new Date().toISOString(),
             })
-            .eq("client_id", p.client_id) // IMPORTANT
-      )
-    );
+            .eq("character_id", p.id)
+        )
+      );
+    } catch (e) {
+      console.error("Failed to sync players to Supabase", e);
+    }
   };
 
-  /* -----------------------------------------
-     UI HELPERS
-     ----------------------------------------- */
+  /* -------------------- UI HELPERS -------------------- */
 
   const btn = (bg) => ({
     padding: "10px 0",
@@ -1117,125 +1120,138 @@ function BattlePage({
     return theme.colors.primaryRed;
   };
 
-  /* -----------------------------------------
-     MODIFYING HP AND ATTRIBUTES
-     ----------------------------------------- */
+  /* -------------------- Logic -------------------- */
 
   const pressNumber = (n) => setInput((p) => p + n);
   const clearInput = () => setInput("");
 
-  const applyChange = async (type) => {
+  const applyChange = (type) => {
     const amt = parseInt(input, 10);
     if (!amt) return;
 
-    const updated = selected.map((p) => {
-      let hp = p.hp;
-      let temp = p.tempHp;
+    setSelected((old) => {
+      const updated = old.map((p) => {
+        let hp = p.hp;
+        let temp = p.tempHp;
 
-      if (type === "damage") {
-        let dmg = amt;
-        if (temp > 0) {
-          const absorbed = Math.min(temp, dmg);
-          temp -= absorbed;
-          dmg -= absorbed;
+        if (type === "damage") {
+          let dmg = amt;
+          if (temp > 0) {
+            const absorbed = Math.min(temp, dmg);
+            temp -= absorbed;
+            dmg -= absorbed;
+          }
+          if (dmg > 0) hp = Math.max(0, hp - dmg);
         }
-        if (dmg > 0) hp = Math.max(0, hp - dmg);
-      }
 
-      if (type === "heal") {
-        hp = Math.min(p.maxHp, hp + amt);
-      }
+        if (type === "heal") {
+          hp = Math.min(p.maxHp, hp + amt);
+        }
 
-      return {
-        ...p,
-        hp,
-        tempHp: temp,
-        client_id: p.client_id, // IMPORTANT PRESERVE
-      };
+        return { ...p, hp, tempHp: temp };
+      });
+
+      // Bestaande callback laten werken
+      onSyncStats?.(updated);
+      // Nieuwe directe Supabase-sync
+      syncToSupabase(updated);
+
+      return updated;
     });
 
-    setSelected(updated);
     setInput("");
-
-    await sendUpdatesToSupabase(updated);
   };
 
   const allAtMax = selected.every((p) => p.hp >= p.maxHp);
 
-  /* -----------------------------------------
-     AC EDIT
-     ----------------------------------------- */
+  /* -------------------- AC EDIT -------------------- */
 
-  const saveAC = async () => {
+  const saveAC = () => {
     if (!editingAC) return;
     const value = parseInt(editingAC.value, 10);
     if (!value) return;
 
-    const updated = selected.map((p) =>
-      p.id === editingAC.id ? { ...p, ac: value, client_id: p.client_id } : p
-    );
+    setSelected((old) => {
+      const updated = old.map((p) =>
+        p.id === editingAC.id ? { ...p, ac: value } : p
+      );
 
-    setSelected(updated);
+      onSyncStats?.(updated);
+      syncToSupabase(updated);
+
+      return updated;
+    });
+
     setEditingAC(null);
-
-    await sendUpdatesToSupabase(updated);
   };
 
-  /* -----------------------------------------
-     REST LOGIC
-     ----------------------------------------- */
+  /* -------------------- Popup Logic -------------------- */
 
-  const confirmLongRest = async () => {
-    const updated = selected.map((p) => ({
-      ...p,
-      hp: p.maxHp,
-      tempHp: 0,
-      client_id: p.client_id,
-    }));
+  const confirmLongRest = () => {
+    setSelected((old) => {
+      const up = old.map((p) => ({
+        ...p,
+        hp: p.maxHp,
+        tempHp: 0,
+      }));
 
-    setSelected(updated);
+      onSyncStats?.(up);
+      syncToSupabase(up);
+
+      return up;
+    });
     setPopup(null);
-
-    await sendUpdatesToSupabase(updated);
   };
 
-  const confirmShortRest = async () => {
+  const confirmShortRest = () => {
     const amt = parseInt(input, 10);
     if (!amt) return;
 
-    const updated = selected.map((p) => ({
-      ...p,
-      hp: Math.min(p.hp + amt, p.maxHp),
-      client_id: p.client_id,
-    }));
+    setSelected((old) => {
+      const up = old.map((p) => ({
+        ...p,
+        hp: Math.min(p.hp + amt, p.maxHp),
+      }));
 
-    setSelected(updated);
+      onSyncStats?.(up);
+      syncToSupabase(up);
+
+      return up;
+    });
+
     setInput("");
     setPopup(null);
-
-    await sendUpdatesToSupabase(updated);
   };
 
-  const confirmTempHp = async () => {
+  const confirmLevelUp = () => {
+    const amt = parseInt(input, 10);
+    if (!amt) return;
+    levelUpSelected(amt);
+    setInput("");
+    setPopup(null);
+  };
+
+  const confirmTempHp = () => {
     const amt = parseInt(input, 10);
     if (!amt) return;
 
-    const updated = selected.map((p) => ({
-      ...p,
-      tempHp: amt,
-      client_id: p.client_id,
-    }));
+    setSelected((old) => {
+      const up = old.map((p) => ({
+        ...p,
+        tempHp: amt,
+      }));
 
-    setSelected(updated);
+      onSyncStats?.(up);
+      syncToSupabase(up);
+
+      return up;
+    });
+
     setInput("");
     setPopup(null);
-
-    await sendUpdatesToSupabase(updated);
   };
 
-  /* -----------------------------------------
-     POPUP UI COMPONENT
-     ----------------------------------------- */
+  /* -------------------- Popup Component -------------------- */
 
   const Popup = ({ title, onConfirm, keypad }) => (
     <div
@@ -1264,6 +1280,7 @@ function BattlePage({
 
         {keypad && (
           <>
+            {/* INPUT */}
             <div
               style={{
                 marginBottom: 12,
@@ -1276,6 +1293,7 @@ function BattlePage({
               Input: <strong>{input || 0}</strong>
             </div>
 
+            {/* KEYPAD */}
             <div
               style={{
                 display: "grid",
@@ -1318,16 +1336,21 @@ function BattlePage({
     </div>
   );
 
-  /* -----------------------------------------
-     UI OUTPUT (UNCHANGED)
-     ----------------------------------------- */
+  /* -------------------- UI -------------------- */
 
   return (
     <div style={{ paddingBottom: 12 }}>
-      {/* CHARACTER CARDS */}
-      <div style={{ display: "grid", gap: 10, marginBottom: 14 }}>
+      {/* CHARACTER CARD */}
+      <div
+        style={{
+          display: "grid",
+          gap: 10,
+          marginBottom: 14,
+        }}
+      >
         {selected.map((p) => (
           <div key={p.id} style={card}>
+            {/* NAME + LEVEL */}
             <div
               style={{
                 display: "flex",
@@ -1365,6 +1388,7 @@ function BattlePage({
                   </div>
                 </div>
 
+                {/* HP + TEMP HP */}
                 <div
                   style={{
                     marginTop: 3,
@@ -1375,6 +1399,7 @@ function BattlePage({
                   HP {p.hp}/{p.maxHp} • Temp {p.tempHp}
                 </div>
 
+                {/* AC LINE */}
                 <div
                   style={{
                     marginTop: 2,
@@ -1387,9 +1412,13 @@ function BattlePage({
                   }}
                 >
                   AC: {p.ac}
+                  {/* AC EDIT BUTTON */}
                   <button
                     onClick={() =>
-                      setEditingAC({ id: p.id, value: p.ac.toString() })
+                      setEditingAC({
+                        id: p.id,
+                        value: p.ac.toString(),
+                      })
                     }
                     style={{
                       padding: "3px 6px",
@@ -1407,6 +1436,7 @@ function BattlePage({
               </div>
             </div>
 
+            {/* HP BAR */}
             <div
               style={{
                 height: 22,
@@ -1486,6 +1516,7 @@ function BattlePage({
           Input: <strong>{input || 0}</strong>
         </div>
 
+        {/* KEYPAD */}
         <div
           style={{
             display: "grid",
@@ -1508,6 +1539,7 @@ function BattlePage({
           <div />
         </div>
 
+        {/* HEAL / DAMAGE */}
         <div style={{ display: "flex", gap: 8 }}>
           <button
             style={bigKey(allAtMax ? "#ccc" : theme.colors.primaryGreen)}
@@ -1543,7 +1575,7 @@ function BattlePage({
         </button>
       </div>
 
-      {/* POPUPS */}
+      {/* REST POPUPS */}
       {popup === "long" && (
         <Popup
           title="Take a Long Rest"
@@ -1559,16 +1591,13 @@ function BattlePage({
         />
       )}
       {popup === "level" && (
-        <Popup
-          title="Level Up!"
-          onConfirm={() => setPopup(null)}
-          keypad={true}
-        />
+        <Popup title="Level Up!" onConfirm={confirmLevelUp} keypad={true} />
       )}
       {popup === "temp" && (
         <Popup title="Add Temp HP" onConfirm={confirmTempHp} keypad={true} />
       )}
 
+      {/* AC EDIT POPUP */}
       {editingAC && (
         <div
           style={{

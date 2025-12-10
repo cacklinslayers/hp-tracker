@@ -1012,9 +1012,35 @@ function BattlePage({
   const [popup, setPopup] = useState(null); // "long" | "short" | "level" | "temp"
   const [editingAC, setEditingAC] = useState(null);
 
+  /* -------------------- SUPABASE SYNC HELPER -------------------- */
+
+  // Stuurt de actuele stats van alle geselecteerde characters naar public.players
+  // volgens jouw CSV-schema: character_id, hp, max_hp, temp_hp, ac, updated_at
+  const syncToSupabase = async (updated) => {
+    if (!updated || !updated.length) return;
+
+    try {
+      await Promise.all(
+        updated.map((p) =>
+          supabase
+            .from("players")
+            .update({
+              hp: p.hp,
+              temp_hp: p.tempHp || 0,
+              ac: p.ac,
+              max_hp: p.maxHp,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("character_id", p.id)
+        )
+      );
+    } catch (e) {
+      console.error("Failed to sync players to Supabase", e);
+    }
+  };
+
   /* -------------------- UI HELPERS -------------------- */
 
-  // Algemeen button-stijl, iets compacter gemaakt
   const btn = (bg) => ({
     padding: "10px 0",
     border: "none",
@@ -1029,30 +1055,28 @@ function BattlePage({
   });
 
   const card = {
-    padding: 12, // was 14
+    padding: 12,
     background: "#fff",
     borderRadius: 12,
     border: "1px solid #D1D5DB",
     boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
   };
 
-  // Numpad keys compacter
   const keyStyle = {
-    padding: "10px 0", // was 16
-    fontSize: 18, // was 20
+    padding: "10px 0",
+    fontSize: 18,
     borderRadius: 10,
     border: "1px solid #9ca3af",
     background: "#F3F3F3",
     cursor: "pointer",
   };
 
-  // Heal / Damage knoppen even hoog als de rest-knoppen
   const bigKey = (bg) => ({
     flex: 1,
-    padding: "10px 0", // was 14
+    padding: "10px 0",
     borderRadius: 10,
     border: "none",
-    fontSize: 16, // was 18
+    fontSize: 16,
     fontWeight: 700,
     cursor: "pointer",
     background: bg,
@@ -1098,7 +1122,11 @@ function BattlePage({
         return { ...p, hp, tempHp: temp };
       });
 
+      // Bestaande callback laten werken
       onSyncStats?.(updated);
+      // Nieuwe directe Supabase-sync
+      syncToSupabase(updated);
+
       return updated;
     });
 
@@ -1118,7 +1146,10 @@ function BattlePage({
       const updated = old.map((p) =>
         p.id === editingAC.id ? { ...p, ac: value } : p
       );
+
       onSyncStats?.(updated);
+      syncToSupabase(updated);
+
       return updated;
     });
 
@@ -1134,7 +1165,10 @@ function BattlePage({
         hp: p.maxHp,
         tempHp: 0,
       }));
+
       onSyncStats?.(up);
+      syncToSupabase(up);
+
       return up;
     });
     setPopup(null);
@@ -1149,7 +1183,10 @@ function BattlePage({
         ...p,
         hp: Math.min(p.hp + amt, p.maxHp),
       }));
+
       onSyncStats?.(up);
+      syncToSupabase(up);
+
       return up;
     });
 
@@ -1174,7 +1211,10 @@ function BattlePage({
         ...p,
         tempHp: amt,
       }));
+
       onSyncStats?.(up);
+      syncToSupabase(up);
+
       return up;
     });
 
@@ -1275,8 +1315,8 @@ function BattlePage({
       <div
         style={{
           display: "grid",
-          gap: 10, // was 12
-          marginBottom: 14, // was 20
+          gap: 10,
+          marginBottom: 14,
         }}
       >
         {selected.map((p) => (
@@ -1286,7 +1326,7 @@ function BattlePage({
               style={{
                 display: "flex",
                 justifyContent: "space-between",
-                marginBottom: 6, // was 8
+                marginBottom: 6,
                 alignItems: "center",
               }}
             >
@@ -1295,14 +1335,14 @@ function BattlePage({
                   style={{
                     display: "flex",
                     alignItems: "baseline",
-                    gap: 6, // was 8
+                    gap: 6,
                   }}
                 >
                   <div
                     style={{
                       fontWeight: 700,
                       fontFamily: '"taurunum", sans-serif',
-                      fontSize: 28, // was 32
+                      fontSize: 28,
                     }}
                   >
                     {p.name}
@@ -1310,7 +1350,7 @@ function BattlePage({
 
                   <div
                     style={{
-                      fontSize: 13, // was 14
+                      fontSize: 13,
                       opacity: 0.8,
                       fontFamily: theme.fonts.body,
                     }}
@@ -1322,8 +1362,8 @@ function BattlePage({
                 {/* HP + TEMP HP */}
                 <div
                   style={{
-                    marginTop: 3, // was 4
-                    fontSize: 12, // was 13
+                    marginTop: 3,
+                    fontSize: 12,
                     fontFamily: theme.fonts.body,
                   }}
                 >
@@ -1334,12 +1374,12 @@ function BattlePage({
                 <div
                   style={{
                     marginTop: 2,
-                    fontSize: 12, // was 13
+                    fontSize: 12,
                     fontFamily: theme.fonts.body,
                     opacity: 0.8,
                     display: "flex",
                     alignItems: "center",
-                    gap: 6, // was 8
+                    gap: 6,
                   }}
                 >
                   AC: {p.ac}
@@ -1352,8 +1392,8 @@ function BattlePage({
                       })
                     }
                     style={{
-                      padding: "3px 6px", // was 4x8
-                      fontSize: 11, // was 12
+                      padding: "3px 6px",
+                      fontSize: 11,
                       borderRadius: 6,
                       border: "none",
                       cursor: "pointer",
@@ -1370,7 +1410,7 @@ function BattlePage({
             {/* HP BAR */}
             <div
               style={{
-                height: 22, // was 26
+                height: 22,
                 background: "#DDD",
                 borderRadius: 6,
                 overflow: "hidden",
@@ -1408,8 +1448,8 @@ function BattlePage({
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(2, 1fr)",
-          gap: 8, // was 10
-          marginBottom: 14, // was 20
+          gap: 8,
+          marginBottom: 14,
         }}
       >
         <button
@@ -1439,7 +1479,7 @@ function BattlePage({
       <div style={{ ...card, marginBottom: 14 }}>
         <div
           style={{
-            marginBottom: 8, // was 10
+            marginBottom: 8,
             fontWeight: 600,
             fontFamily: theme.fonts.body,
           }}
@@ -1452,8 +1492,8 @@ function BattlePage({
           style={{
             display: "grid",
             gridTemplateColumns: "repeat(3, 1fr)",
-            gap: 6, // was 8
-            marginBottom: 10, // was 12
+            gap: 6,
+            marginBottom: 10,
           }}
         >
           {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (

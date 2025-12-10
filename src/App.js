@@ -1001,20 +1001,37 @@ function OverviewPage({
     </div>
   );
 }
-function BattlePage({
-  selected,
-  setSelected,
-  goOverview,
-  levelUpSelected,
-  onSyncStats,
-}) {
+function BattlePage({ selected, setSelected, goOverview, levelUpSelected }) {
   const [input, setInput] = useState("");
-  const [popup, setPopup] = useState(null); // "long" | "short" | "level" | "temp"
+  const [popup, setPopup] = useState(null);
   const [editingAC, setEditingAC] = useState(null);
 
-  /* -------------------- UI HELPERS -------------------- */
+  /* -----------------------------------------
+     CENTRAL SUPABASE UPDATE FUNCTION
+     ----------------------------------------- */
 
-  // Algemeen button-stijl, iets compacter gemaakt
+  const sendUpdatesToSupabase = async (updated) => {
+    await Promise.all(
+      updated.map(
+        (p) =>
+          supabase
+            .from("players")
+            .update({
+              hp: p.hp,
+              temp_hp: p.tempHp,
+              ac: p.ac,
+              max_hp: p.maxHp,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("client_id", p.client_id) // IMPORTANT
+      )
+    );
+  };
+
+  /* -----------------------------------------
+     UI HELPERS
+     ----------------------------------------- */
+
   const btn = (bg) => ({
     padding: "10px 0",
     border: "none",
@@ -1029,30 +1046,28 @@ function BattlePage({
   });
 
   const card = {
-    padding: 12, // was 14
+    padding: 12,
     background: "#fff",
     borderRadius: 12,
     border: "1px solid #D1D5DB",
     boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
   };
 
-  // Numpad keys compacter
   const keyStyle = {
-    padding: "10px 0", // was 16
-    fontSize: 18, // was 20
+    padding: "10px 0",
+    fontSize: 18,
     borderRadius: 10,
     border: "1px solid #9ca3af",
     background: "#F3F3F3",
     cursor: "pointer",
   };
 
-  // Heal / Damage knoppen even hoog als de rest-knoppen
   const bigKey = (bg) => ({
     flex: 1,
-    padding: "10px 0", // was 14
+    padding: "10px 0",
     borderRadius: 10,
     border: "none",
-    fontSize: 16, // was 18
+    fontSize: 16,
     fontWeight: 700,
     cursor: "pointer",
     background: bg,
@@ -1067,159 +1082,125 @@ function BattlePage({
     return theme.colors.primaryRed;
   };
 
-  /* -------------------- SUPABASE SYNC HELPER -------------------- */
-
-  // Stuurt alle geselecteerde spelers naar de "players" tabel in Supabase
-  // via character_id (dat is je lokale p.id).
-  const syncPlayersToSupabase = async (updated) => {
-    try {
-      await Promise.all(
-        updated.map((p) =>
-          supabase
-            .from("players")
-            .update({
-              hp: p.hp,
-              max_hp: p.maxHp,
-              temp_hp: p.tempHp ?? 0,
-              ac: p.ac,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("character_id", p.id)
-        )
-      );
-    } catch (err) {
-      console.error("Failed to sync players to Supabase", err);
-    }
-  };
-
-  /* -------------------- Logic -------------------- */
+  /* -----------------------------------------
+     MODIFYING HP AND ATTRIBUTES
+     ----------------------------------------- */
 
   const pressNumber = (n) => setInput((p) => p + n);
   const clearInput = () => setInput("");
 
-  const applyChange = (type) => {
+  const applyChange = async (type) => {
     const amt = parseInt(input, 10);
     if (!amt) return;
 
-    setSelected((old) => {
-      const updated = old.map((p) => {
-        let hp = p.hp;
-        let temp = p.tempHp;
+    const updated = selected.map((p) => {
+      let hp = p.hp;
+      let temp = p.tempHp;
 
-        if (type === "damage") {
-          let dmg = amt;
-          if (temp > 0) {
-            const absorbed = Math.min(temp, dmg);
-            temp -= absorbed;
-            dmg -= absorbed;
-          }
-          if (dmg > 0) hp = Math.max(0, hp - dmg);
+      if (type === "damage") {
+        let dmg = amt;
+        if (temp > 0) {
+          const absorbed = Math.min(temp, dmg);
+          temp -= absorbed;
+          dmg -= absorbed;
         }
+        if (dmg > 0) hp = Math.max(0, hp - dmg);
+      }
 
-        if (type === "heal") {
-          hp = Math.min(p.maxHp, hp + amt);
-        }
+      if (type === "heal") {
+        hp = Math.min(p.maxHp, hp + amt);
+      }
 
-        return { ...p, hp, tempHp: temp };
-      });
-
-      onSyncStats?.(updated);
-      // 🔥 push naar Supabase
-      syncPlayersToSupabase(updated);
-
-      return updated;
+      return {
+        ...p,
+        hp,
+        tempHp: temp,
+        client_id: p.client_id, // IMPORTANT PRESERVE
+      };
     });
 
+    setSelected(updated);
     setInput("");
+
+    await sendUpdatesToSupabase(updated);
   };
 
   const allAtMax = selected.every((p) => p.hp >= p.maxHp);
 
-  /* -------------------- AC EDIT -------------------- */
+  /* -----------------------------------------
+     AC EDIT
+     ----------------------------------------- */
 
-  const saveAC = () => {
+  const saveAC = async () => {
     if (!editingAC) return;
     const value = parseInt(editingAC.value, 10);
     if (!value) return;
 
-    setSelected((old) => {
-      const updated = old.map((p) =>
-        p.id === editingAC.id ? { ...p, ac: value } : p
-      );
-      onSyncStats?.(updated);
-      // 🔥 push naar Supabase
-      syncPlayersToSupabase(updated);
-      return updated;
-    });
+    const updated = selected.map((p) =>
+      p.id === editingAC.id ? { ...p, ac: value, client_id: p.client_id } : p
+    );
 
+    setSelected(updated);
     setEditingAC(null);
+
+    await sendUpdatesToSupabase(updated);
   };
 
-  /* -------------------- Popup Logic -------------------- */
+  /* -----------------------------------------
+     REST LOGIC
+     ----------------------------------------- */
 
-  const confirmLongRest = () => {
-    setSelected((old) => {
-      const up = old.map((p) => ({
-        ...p,
-        hp: p.maxHp,
-        tempHp: 0,
-      }));
-      onSyncStats?.(up);
-      // 🔥 push naar Supabase
-      syncPlayersToSupabase(up);
-      return up;
-    });
+  const confirmLongRest = async () => {
+    const updated = selected.map((p) => ({
+      ...p,
+      hp: p.maxHp,
+      tempHp: 0,
+      client_id: p.client_id,
+    }));
+
+    setSelected(updated);
     setPopup(null);
+
+    await sendUpdatesToSupabase(updated);
   };
 
-  const confirmShortRest = () => {
+  const confirmShortRest = async () => {
     const amt = parseInt(input, 10);
     if (!amt) return;
 
-    setSelected((old) => {
-      const up = old.map((p) => ({
-        ...p,
-        hp: Math.min(p.hp + amt, p.maxHp),
-      }));
-      onSyncStats?.(up);
-      // 🔥 push naar Supabase
-      syncPlayersToSupabase(up);
-      return up;
-    });
+    const updated = selected.map((p) => ({
+      ...p,
+      hp: Math.min(p.hp + amt, p.maxHp),
+      client_id: p.client_id,
+    }));
 
+    setSelected(updated);
     setInput("");
     setPopup(null);
+
+    await sendUpdatesToSupabase(updated);
   };
 
-  const confirmLevelUp = () => {
-    const amt = parseInt(input, 10);
-    if (!amt) return;
-    levelUpSelected(amt);
-    setInput("");
-    setPopup(null);
-    // Als je level-up ook naar Supabase wilt syncen, kan dat later nog
-  };
-
-  const confirmTempHp = () => {
+  const confirmTempHp = async () => {
     const amt = parseInt(input, 10);
     if (!amt) return;
 
-    setSelected((old) => {
-      const up = old.map((p) => ({
-        ...p,
-        tempHp: amt,
-      }));
-      onSyncStats?.(up);
-      // 🔥 push naar Supabase
-      syncPlayersToSupabase(up);
-      return up;
-    });
+    const updated = selected.map((p) => ({
+      ...p,
+      tempHp: amt,
+      client_id: p.client_id,
+    }));
 
+    setSelected(updated);
     setInput("");
     setPopup(null);
+
+    await sendUpdatesToSupabase(updated);
   };
 
-  /* -------------------- Popup Component -------------------- */
+  /* -----------------------------------------
+     POPUP UI COMPONENT
+     ----------------------------------------- */
 
   const Popup = ({ title, onConfirm, keypad }) => (
     <div
@@ -1248,7 +1229,6 @@ function BattlePage({
 
         {keypad && (
           <>
-            {/* INPUT */}
             <div
               style={{
                 marginBottom: 12,
@@ -1261,7 +1241,6 @@ function BattlePage({
               Input: <strong>{input || 0}</strong>
             </div>
 
-            {/* KEYPAD */}
             <div
               style={{
                 display: "grid",
@@ -1304,26 +1283,21 @@ function BattlePage({
     </div>
   );
 
-  /* -------------------- UI -------------------- */
+  /* -----------------------------------------
+     UI OUTPUT (UNCHANGED)
+     ----------------------------------------- */
 
   return (
     <div style={{ paddingBottom: 12 }}>
-      {/* CHARACTER CARD */}
-      <div
-        style={{
-          display: "grid",
-          gap: 10, // was 12
-          marginBottom: 14, // was 20
-        }}
-      >
+      {/* CHARACTER CARDS */}
+      <div style={{ display: "grid", gap: 10, marginBottom: 14 }}>
         {selected.map((p) => (
           <div key={p.id} style={card}>
-            {/* NAME + LEVEL */}
             <div
               style={{
                 display: "flex",
                 justifyContent: "space-between",
-                marginBottom: 6, // was 8
+                marginBottom: 6,
                 alignItems: "center",
               }}
             >
@@ -1332,14 +1306,14 @@ function BattlePage({
                   style={{
                     display: "flex",
                     alignItems: "baseline",
-                    gap: 6, // was 8
+                    gap: 6,
                   }}
                 >
                   <div
                     style={{
                       fontWeight: 700,
                       fontFamily: '"taurunum", sans-serif',
-                      fontSize: 28, // was 32
+                      fontSize: 28,
                     }}
                   >
                     {p.name}
@@ -1347,7 +1321,7 @@ function BattlePage({
 
                   <div
                     style={{
-                      fontSize: 13, // was 14
+                      fontSize: 13,
                       opacity: 0.8,
                       fontFamily: theme.fonts.body,
                     }}
@@ -1356,41 +1330,35 @@ function BattlePage({
                   </div>
                 </div>
 
-                {/* HP + TEMP HP */}
                 <div
                   style={{
-                    marginTop: 3, // was 4
-                    fontSize: 12, // was 13
+                    marginTop: 3,
+                    fontSize: 12,
                     fontFamily: theme.fonts.body,
                   }}
                 >
                   HP {p.hp}/{p.maxHp} • Temp {p.tempHp}
                 </div>
 
-                {/* AC LINE */}
                 <div
                   style={{
                     marginTop: 2,
-                    fontSize: 12, // was 13
+                    fontSize: 12,
                     fontFamily: theme.fonts.body,
                     opacity: 0.8,
                     display: "flex",
                     alignItems: "center",
-                    gap: 6, // was 8
+                    gap: 6,
                   }}
                 >
                   AC: {p.ac}
-                  {/* AC EDIT BUTTON */}
                   <button
                     onClick={() =>
-                      setEditingAC({
-                        id: p.id,
-                        value: p.ac.toString(),
-                      })
+                      setEditingAC({ id: p.id, value: p.ac.toString() })
                     }
                     style={{
-                      padding: "3px 6px", // was 4x8
-                      fontSize: 11, // was 12
+                      padding: "3px 6px",
+                      fontSize: 11,
                       borderRadius: 6,
                       border: "none",
                       cursor: "pointer",
@@ -1404,10 +1372,9 @@ function BattlePage({
               </div>
             </div>
 
-            {/* HP BAR */}
             <div
               style={{
-                height: 22, // was 26
+                height: 22,
                 background: "#DDD",
                 borderRadius: 6,
                 overflow: "hidden",
@@ -1445,8 +1412,8 @@ function BattlePage({
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(2, 1fr)",
-          gap: 8, // was 10
-          marginBottom: 14, // was 20
+          gap: 8,
+          marginBottom: 14,
         }}
       >
         <button
@@ -1476,7 +1443,7 @@ function BattlePage({
       <div style={{ ...card, marginBottom: 14 }}>
         <div
           style={{
-            marginBottom: 8, // was 10
+            marginBottom: 8,
             fontWeight: 600,
             fontFamily: theme.fonts.body,
           }}
@@ -1484,13 +1451,12 @@ function BattlePage({
           Input: <strong>{input || 0}</strong>
         </div>
 
-        {/* KEYPAD */}
         <div
           style={{
             display: "grid",
             gridTemplateColumns: "repeat(3, 1fr)",
-            gap: 6, // was 8
-            marginBottom: 10, // was 12
+            gap: 6,
+            marginBottom: 10,
           }}
         >
           {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
@@ -1507,7 +1473,6 @@ function BattlePage({
           <div />
         </div>
 
-        {/* HEAL / DAMAGE */}
         <div style={{ display: "flex", gap: 8 }}>
           <button
             style={bigKey(allAtMax ? "#ccc" : theme.colors.primaryGreen)}
@@ -1543,7 +1508,7 @@ function BattlePage({
         </button>
       </div>
 
-      {/* REST POPUPS */}
+      {/* POPUPS */}
       {popup === "long" && (
         <Popup
           title="Take a Long Rest"
@@ -1559,13 +1524,16 @@ function BattlePage({
         />
       )}
       {popup === "level" && (
-        <Popup title="Level Up!" onConfirm={confirmLevelUp} keypad={true} />
+        <Popup
+          title="Level Up!"
+          onConfirm={() => setPopup(null)}
+          keypad={true}
+        />
       )}
       {popup === "temp" && (
         <Popup title="Add Temp HP" onConfirm={confirmTempHp} keypad={true} />
       )}
 
-      {/* AC EDIT POPUP */}
       {editingAC && (
         <div
           style={{
@@ -1998,6 +1966,7 @@ function JoinDungeonPage({
   clientId,
   setPlayerDungeonCode,
   setIsInDungeonAsPlayer,
+  setSelected, // <-- BELANGRIJK: we krijgen selected van App
   goBack,
 }) {
   const [code, setCode] = useState("");
@@ -2007,7 +1976,72 @@ function JoinDungeonPage({
 
   const normalizedCode = code.replace(/\s+/g, "").toUpperCase();
 
-  /* ---------------- CHARACTER CARD STYLE ---------------- */
+  /* ---------------- JOIN LOGIC ---------------- */
+
+  const doJoin = async () => {
+    setError("");
+
+    if (!normalizedCode || !selectedId) {
+      setError("Enter a dungeon code and choose a hero.");
+      return;
+    }
+
+    const character = team.find((p) => p.id === selectedId);
+    if (!character) {
+      setError("Invalid hero.");
+      return;
+    }
+
+    setBusy(true);
+
+    try {
+      // 1️⃣ upsert to Supabase
+      const { error: upsertError } = await supabase.from("players").upsert({
+        dungeon_code: normalizedCode,
+        client_id: clientId,
+        character_id: character.id,
+        name: character.name,
+        level: character.level,
+        hp: character.hp,
+        max_hp: character.maxHp,
+        temp_hp: character.tempHp || 0,
+        ac: character.ac ?? 10,
+        updated_at: new Date().toISOString(),
+      });
+
+      if (upsertError) {
+        console.error(upsertError);
+        setError("Could not join dungeon. Check the code.");
+        return;
+      }
+
+      // 2️⃣ VERY IMPORTANT:
+      // voeg client_id toe aan het local object,
+      // zodat BattlePage weet wie hij is
+      const enriched = {
+        ...character,
+        client_id: clientId,
+        dungeon_code: normalizedCode,
+      };
+
+      // 3️⃣ Sla dit op als geselecteerde character
+      setSelected([enriched]);
+
+      // 4️⃣ Update state van app
+      setPlayerDungeonCode(normalizedCode);
+      setIsInDungeonAsPlayer(true);
+
+      // 5️⃣ terug naar overview of battle
+      goBack();
+    } catch (e) {
+      console.error(e);
+      setError("Something went wrong while joining.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /* ---------------- UI ---------------- */
 
   const card = {
     padding: 12,
@@ -2025,52 +2059,6 @@ function JoinDungeonPage({
     boxShadow: `0 0 0 1px ${theme.colors.primaryRed}`,
   };
 
-  /* ---------------- JOIN LOGIC ---------------- */
-
-  const doJoin = async () => {
-    setError("");
-    if (!normalizedCode || !selectedId) {
-      setError("Enter a dungeon code and choose a hero.");
-      return;
-    }
-
-    const character = team.find((p) => p.id === selectedId);
-    if (!character) {
-      setError("Invalid hero.");
-      return;
-    }
-
-    setBusy(true);
-    try {
-      const { error: upsertError } = await supabase.from("players").upsert({
-        dungeon_code: normalizedCode,
-        client_id: clientId,
-        character_id: character.id,
-        name: character.name,
-        level: character.level,
-        hp: character.hp,
-        max_hp: character.maxHp,
-        temp_hp: character.tempHp || 0,
-        ac: character.ac ?? 10,
-        updated_at: new Date().toISOString(),
-      });
-
-      if (upsertError) {
-        setError("Could not join dungeon. Check the code.");
-      } else {
-        setPlayerDungeonCode(normalizedCode);
-        setIsInDungeonAsPlayer(true);
-        goBack();
-      }
-    } catch (e) {
-      setError("Something went wrong while joining.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  /* ---------------- UI ---------------- */
-
   return (
     <div>
       {/* PAGE TITLE */}
@@ -2084,10 +2072,10 @@ function JoinDungeonPage({
         Join Session
       </h1>
 
-      {/* DUNGEON CODE CARD */}
+      {/* DUNGEON CODE FIELD */}
       <div style={{ ...card, marginBottom: 14 }}>
         <input
-          placeholder="Enter the dungeon code to send in your hero… (e.g. XG4-92K)"
+          placeholder="Enter the dungeon code… (e.g. XG4-92K)"
           value={code}
           onChange={(e) => setCode(e.target.value)}
           style={{
@@ -2104,7 +2092,7 @@ function JoinDungeonPage({
         />
 
         <div style={{ fontSize: 12, color: "#6b7280" }}>
-          Changes in HP / Temp HP / AC are automatically shared with the DM.
+          HP / Temp HP / AC changes are shared automatically.
         </div>
       </div>
 
@@ -2122,12 +2110,9 @@ function JoinDungeonPage({
       {/* HERO LIST */}
       <div style={{ display: "grid", gap: 10, marginBottom: 16 }}>
         {team.map((p) => {
-          const isSelected = p.id === selectedId;
-          const style = isSelected ? selectedCard : card;
-
+          const style = p.id === selectedId ? selectedCard : card;
           return (
             <div key={p.id} style={style} onClick={() => setSelectedId(p.id)}>
-              {/* NAME + LEVEL */}
               <div
                 style={{
                   display: "flex",
@@ -2145,11 +2130,10 @@ function JoinDungeonPage({
                 >
                   {p.name}
                 </div>
-
                 <div
                   style={{
                     fontSize: 14,
-                    opacity: isSelected ? 1 : 0.7,
+                    opacity: p.id === selectedId ? 1 : 0.7,
                     fontFamily: theme.fonts.body,
                   }}
                 >
@@ -2157,25 +2141,21 @@ function JoinDungeonPage({
                 </div>
               </div>
 
-              {/* HP */}
               <div
                 style={{
                   fontSize: 14,
                   marginTop: 2,
                   fontFamily: theme.fonts.body,
-                  opacity: isSelected ? 0.95 : 0.85,
                 }}
               >
                 HP {p.hp}/{p.maxHp} • Temp {p.tempHp || 0}
               </div>
 
-              {/* AC */}
               <div
                 style={{
                   fontSize: 14,
                   marginTop: 2,
                   fontFamily: theme.fonts.body,
-                  opacity: isSelected ? 0.95 : 0.85,
                 }}
               >
                 AC: {p.ac}
@@ -2185,7 +2165,7 @@ function JoinDungeonPage({
         })}
       </div>
 
-      {/* ERROR MESSAGE */}
+      {/* ERROR */}
       {error && (
         <div
           style={{

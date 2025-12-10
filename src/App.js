@@ -9,6 +9,23 @@ const SUPABASE_ANON_KEY =
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+const syncPlayerToDatabase = async (updated) => {
+  if (!isInDungeonAsPlayer || !playerDungeonCode) return;
+
+  const p = updated[0]; // first hero
+
+  await supabase
+    .from("players")
+    .update({
+      hp: p.hp,
+      temp_hp: p.tempHp,
+      ac: p.ac,
+      max_hp: p.maxHp,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("dungeon_code", playerDungeonCode)
+    .eq("client_id", clientId);
+};
 function getOrCreateClientId() {
   try {
     const stored = localStorage.getItem("hp-tracker-client-id");
@@ -362,6 +379,7 @@ export default function App() {
                   healToFullSelected={healToFullSelected}
                   levelUpSelected={levelUpSelected}
                   addTempHpSelected={addTempHpSelected}
+                  onSyncStats={syncPlayerToDatabase}
                 />
               )}
 
@@ -1001,7 +1019,13 @@ function OverviewPage({
     </div>
   );
 }
-function BattlePage({ selected, setSelected, goOverview, levelUpSelected }) {
+function BattlePage({
+  selected,
+  setSelected,
+  goOverview,
+  levelUpSelected,
+  onSyncStats,
+}) {
   const [input, setInput] = useState("");
   const [popup, setPopup] = useState(null);
   const [editingAC, setEditingAC] = useState(null);

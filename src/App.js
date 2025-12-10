@@ -1069,14 +1069,13 @@ function BattlePage({
 
   /* -------------------- SUPABASE SYNC HELPER -------------------- */
 
+  // Stuurt alle geselecteerde spelers naar de "players" tabel in Supabase
+  // via character_id (dat is je lokale p.id).
   const syncPlayersToSupabase = async (updated) => {
     try {
       await Promise.all(
-        updated.map((p) => {
-          // Alleen syncen als we weten welke rij in "players" dit is
-          if (!p.client_id) return null;
-
-          return supabase
+        updated.map((p) =>
+          supabase
             .from("players")
             .update({
               hp: p.hp,
@@ -1085,8 +1084,8 @@ function BattlePage({
               ac: p.ac,
               updated_at: new Date().toISOString(),
             })
-            .eq("client_id", p.client_id);
-        })
+            .eq("character_id", p.id)
+        )
       );
     } catch (err) {
       console.error("Failed to sync players to Supabase", err);
@@ -1098,89 +1097,98 @@ function BattlePage({
   const pressNumber = (n) => setInput((p) => p + n);
   const clearInput = () => setInput("");
 
-  const applyChange = async (type) => {
+  const applyChange = (type) => {
     const amt = parseInt(input, 10);
     if (!amt) return;
 
-    const updated = selected.map((p) => {
-      let hp = p.hp;
-      let temp = p.tempHp;
+    setSelected((old) => {
+      const updated = old.map((p) => {
+        let hp = p.hp;
+        let temp = p.tempHp;
 
-      if (type === "damage") {
-        let dmg = amt;
-        if (temp > 0) {
-          const absorbed = Math.min(temp, dmg);
-          temp -= absorbed;
-          dmg -= absorbed;
+        if (type === "damage") {
+          let dmg = amt;
+          if (temp > 0) {
+            const absorbed = Math.min(temp, dmg);
+            temp -= absorbed;
+            dmg -= absorbed;
+          }
+          if (dmg > 0) hp = Math.max(0, hp - dmg);
         }
-        if (dmg > 0) hp = Math.max(0, hp - dmg);
-      }
 
-      if (type === "heal") {
-        hp = Math.min(p.maxHp, hp + amt);
-      }
+        if (type === "heal") {
+          hp = Math.min(p.maxHp, hp + amt);
+        }
 
-      return { ...p, hp, tempHp: temp };
+        return { ...p, hp, tempHp: temp };
+      });
+
+      onSyncStats?.(updated);
+      // 🔥 push naar Supabase
+      syncPlayersToSupabase(updated);
+
+      return updated;
     });
 
-    setSelected(updated);
-    onSyncStats?.(updated);
     setInput("");
-
-    await syncPlayersToSupabase(updated);
   };
 
   const allAtMax = selected.every((p) => p.hp >= p.maxHp);
 
   /* -------------------- AC EDIT -------------------- */
 
-  const saveAC = async () => {
+  const saveAC = () => {
     if (!editingAC) return;
     const value = parseInt(editingAC.value, 10);
     if (!value) return;
 
-    const updated = selected.map((p) =>
-      p.id === editingAC.id ? { ...p, ac: value } : p
-    );
+    setSelected((old) => {
+      const updated = old.map((p) =>
+        p.id === editingAC.id ? { ...p, ac: value } : p
+      );
+      onSyncStats?.(updated);
+      // 🔥 push naar Supabase
+      syncPlayersToSupabase(updated);
+      return updated;
+    });
 
-    setSelected(updated);
-    onSyncStats?.(updated);
     setEditingAC(null);
-
-    await syncPlayersToSupabase(updated);
   };
 
   /* -------------------- Popup Logic -------------------- */
 
-  const confirmLongRest = async () => {
-    const up = selected.map((p) => ({
-      ...p,
-      hp: p.maxHp,
-      tempHp: 0,
-    }));
-
-    setSelected(up);
-    onSyncStats?.(up);
+  const confirmLongRest = () => {
+    setSelected((old) => {
+      const up = old.map((p) => ({
+        ...p,
+        hp: p.maxHp,
+        tempHp: 0,
+      }));
+      onSyncStats?.(up);
+      // 🔥 push naar Supabase
+      syncPlayersToSupabase(up);
+      return up;
+    });
     setPopup(null);
-
-    await syncPlayersToSupabase(up);
   };
 
-  const confirmShortRest = async () => {
+  const confirmShortRest = () => {
     const amt = parseInt(input, 10);
     if (!amt) return;
 
-    const up = selected.map((p) => ({
-      ...p,
-      hp: Math.min(p.hp + amt, p.maxHp),
-    }));
+    setSelected((old) => {
+      const up = old.map((p) => ({
+        ...p,
+        hp: Math.min(p.hp + amt, p.maxHp),
+      }));
+      onSyncStats?.(up);
+      // 🔥 push naar Supabase
+      syncPlayersToSupabase(up);
+      return up;
+    });
 
-    setSelected(up);
-    onSyncStats?.(up);
     setInput("");
     setPopup(null);
-
-    await syncPlayersToSupabase(up);
   };
 
   const confirmLevelUp = () => {
@@ -1189,24 +1197,26 @@ function BattlePage({
     levelUpSelected(amt);
     setInput("");
     setPopup(null);
-    // Level up sync kun je later nog toevoegen als je wilt
+    // Als je level-up ook naar Supabase wilt syncen, kan dat later nog
   };
 
-  const confirmTempHp = async () => {
+  const confirmTempHp = () => {
     const amt = parseInt(input, 10);
     if (!amt) return;
 
-    const up = selected.map((p) => ({
-      ...p,
-      tempHp: amt,
-    }));
+    setSelected((old) => {
+      const up = old.map((p) => ({
+        ...p,
+        tempHp: amt,
+      }));
+      onSyncStats?.(up);
+      // 🔥 push naar Supabase
+      syncPlayersToSupabase(up);
+      return up;
+    });
 
-    setSelected(up);
-    onSyncStats?.(up);
     setInput("");
     setPopup(null);
-
-    await syncPlayersToSupabase(up);
   };
 
   /* -------------------- Popup Component -------------------- */

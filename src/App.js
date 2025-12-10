@@ -9,23 +9,6 @@ const SUPABASE_ANON_KEY =
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-const syncPlayerToDatabase = async (updated) => {
-  if (!isInDungeonAsPlayer || !playerDungeonCode) return;
-
-  const p = updated[0]; // first hero
-
-  await supabase
-    .from("players")
-    .update({
-      hp: p.hp,
-      temp_hp: p.tempHp,
-      ac: p.ac,
-      max_hp: p.maxHp,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("dungeon_code", playerDungeonCode)
-    .eq("client_id", clientId);
-};
 function getOrCreateClientId() {
   try {
     const stored = localStorage.getItem("hp-tracker-client-id");
@@ -163,6 +146,33 @@ export default function App() {
   const [clientId] = useState(() => getOrCreateClientId());
   const [isInDungeonAsPlayer, setIsInDungeonAsPlayer] = useState(false);
   const [playerDungeonCode, setPlayerDungeonCode] = useState("");
+
+  /* ---------- SYNC PLAYER TO SUPABASE (TOEGEVOEGD) ---------- */
+  const syncPlayerToDatabase = async (updated) => {
+    if (!isInDungeonAsPlayer || !playerDungeonCode) return;
+    if (!updated || !updated.length) return;
+
+    const p = updated[0];
+
+    try {
+      const { data, error } = await supabase
+        .from("players")
+        .update({
+          hp: p.hp,
+          temp_hp: p.tempHp,
+          ac: p.ac,
+          max_hp: p.maxHp,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("dungeon_code", playerDungeonCode.toUpperCase())
+        .eq("client_id", String(clientId))
+        .eq("character_id", p.id);
+
+      console.log("UPDATE RESULT:", { data, error });
+    } catch (e) {
+      console.error("Failed to sync player to Supabase", e);
+    }
+  };
 
   /* ---------- SAVE TEAM ---------- */
   useEffect(() => {
@@ -429,6 +439,7 @@ export default function App() {
                   clientId={clientId}
                   setPlayerDungeonCode={setPlayerDungeonCode}
                   setIsInDungeonAsPlayer={setIsInDungeonAsPlayer}
+                  setSelected={setSelected} {/* <-- TOEGEVOEGD */}
                   goBack={() => setPage("overview")}
                 />
               )}
